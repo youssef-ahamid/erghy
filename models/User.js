@@ -122,7 +122,7 @@ UserSchema.statics.getByUsername = function (req, res) {
           res.send(user);
         });
   } catch (e) {
-    res.status(400).send(e);
+    res.send(e);
   }
 };
 

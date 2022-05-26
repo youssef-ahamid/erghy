@@ -46,7 +46,7 @@ RoomSchema.statics.getAll = function (req, res) {
       .then((rooms) => res.send(rooms));
   } catch (e) {
     console.error(e);
-    res.status(400).json(e);
+    res.send(e);
   }
 };
 RoomSchema.statics.get = function (req, res) {
@@ -57,10 +57,10 @@ RoomSchema.statics.get = function (req, res) {
     });
   } catch (error) {
     console.error(error);
-    res.status(400).json(error);
+    res.send(error);
   }
 };
-RoomSchema.statics.create = function (req, res) {
+RoomSchema.statics.create = async function (req, res) {
   try {
     const { title, description, image, participants } = req.body;
 
@@ -74,13 +74,31 @@ RoomSchema.statics.create = function (req, res) {
       title,
       description,
       image,
-      participants: participants || [],
+      participants: participants.map((p) => {
+        return { user: mongoose.Types.ObjectId(p) };
+      }),
     });
 
-    room.save().then((savedRoom) => res.send(savedRoom));
+    let usersSaved = 0;
+
+    await room.save().then((savedRoom) => {
+      savedRoom.participants.forEach((p) => {
+        mongoose
+          .model("User")
+          .findById(p.user)
+          .then(async (user) => {
+            user.rooms.push(room);
+            await user.save().then(() => {
+              usersSaved++;
+              if (usersSaved == savedRoom.participants.length)
+                res.send(savedRoom);
+            });
+          });
+      });
+    });
   } catch (error) {
     console.error(error);
-    res.status(400).json(error);
+    res.send(error);
   }
 };
 RoomSchema.statics.update = function (req, res) {
@@ -102,7 +120,7 @@ RoomSchema.statics.update = function (req, res) {
       });
   } catch (error) {
     console.error(error);
-    res.status(400).json(error);
+    res.send(error);
   }
 };
 RoomSchema.statics.delete = function (req, res) {
@@ -113,7 +131,7 @@ RoomSchema.statics.delete = function (req, res) {
       .then((deletedRoom) => res.send(deletedRoom));
   } catch (error) {
     console.error(error);
-    res.status(400).json(error);
+    res.send(error);
   }
 };
 

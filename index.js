@@ -60,10 +60,80 @@ console.log("Socket on... Awaiting live connections");
 
 const UserModel = require("./models/User.js");
 const MessageModel = require("./models/Message.js");
+const RoomModel = require("./models/Room.js");
 const ObjectId = mongoose.Types.ObjectId;
 io.on("connection", (socket) => {
   let currentUser;
-  console.log("a user connected with a socket id of", socket.id);
+  console.log(`
+    user connected!
+    online users: ${io.engine.clientsCount}
+  `);
+
+  socket.on("create-room", async (room, cb) => {
+    if (!currentUser) {
+      socket.emit("no-user", room);
+      return cb("You must be logged in to create a room");
+    }
+    room.participants.push(ObjectId(currentUser._id).toString());
+    if (!!room.invite)
+      await UserModel.getByUsername(
+        {
+          body: {},
+          params: { username: room.invite },
+        },
+        {
+          send: async (user) => {
+            room.participants.push(ObjectId(user._id).toString());
+            await RoomModel.create(
+              {
+                body: room,
+              },
+              {
+                send: (room) => {
+                  cb(room);
+                },
+              }
+            );
+          },
+        }
+      );
+    else
+      await RoomModel.create(
+        {
+          body: room,
+        },
+        {
+          send: (room) => {
+            cb(room);
+          },
+        }
+      );
+  });
+
+  socket.on("add-to-room", async (username, room, cb) => {
+    console.log(room);
+    await UserModel.getByUsername(
+      {
+        params: { username },
+      },
+      {
+        send: async (user) => {
+          let participants = [...room.participants, user._id];
+          await RoomModel.update(
+            {
+              params: { id: room._id },
+              body: { participants },
+            },
+            {
+              send: (room) => {
+                cb(room);
+              },
+            }
+          );
+        },
+      }
+    );
+  });
 
   socket.on("get-user-chats", async (identifier, cb) => {
     await UserModel.getByUsername(
